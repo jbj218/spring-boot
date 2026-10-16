@@ -194,3 +194,157 @@ Spring 自己的初始化机制：
 | 12   | destroyMethod  | `@Bean(destroyMethod="xxx")` 指定的方法 | 配置声明                   | 第三方对象的销毁。`@Bean` 默认会自动推断 `close()` / `shutdown()` |
 
 **销毁回调只对单例 bean 生效。** prototype 的 bean 出了容器就不管了，销毁由你自己负责。
+
+
+
+## 3、AOP
+
+> 什么是AOP？
+
+AOP即面向切面编程，用于封装于业务无关，为业务所共用的逻辑（日志、事务、权限控制....）
+
+AOP基于动态代理：
+
+1、JDK代理，需要实现某个接口
+
+2、CGLIB代理，无需实现接口，基于继承。（spring2.x后默认都是这个）
+
+> Spring AOP 和AspectJ AOP的区别
+
+Spring AOP 支持运行时织入，构造函数，静态方法，字段访问都做不到
+
+AspectJ AOP 支持运行、类加载、编译时（字节码层面的操作），功能更加的强大
+
+> Spring AOP 常见通知类型
+
+5种
+前置通知before
+
+后置通知after
+
+返回通知
+
+异常返回通知
+
+环绕（around）最强大，其他通知只能“在方法前后做点事”，@Around 能“完全接管方法的执行”。
+
+<h3>Tip:</h3>
+
+当多个通知同时存在时，执行顺序是：
+
+~~~text
+@Around 前半部分
+    ↓
+@Before
+    ↓
+目标方法执行
+    ↓
+@AfterReturning / @AfterThrowing
+    ↓
+@After
+    ↓
+@Around 后半部分
+~~~
+
+![image-20261016101004550](https://natureshiyi-image.oss-cn-hangzhou.aliyuncs.com/img/image-20261016101004550.png)
+
+## 4、Spring MVC
+
+> Spring MVC工作流程
+
+1、DispatcherServlet 根据URL查询能够处理的Handler（即`Controller` 控制器）
+
+2、Hanlder处理请求
+
+3、返回视图或JSON(前后端分离)
+
+更细节的流程：
+
+![image-20261016101902704](https://natureshiyi-image.oss-cn-hangzhou.aliyuncs.com/img/image-20261016101902704.png)
+
+## 5、循环依赖
+
+> 什么是循环依赖?
+
+循环依赖指两个及以上的bean互相持有对方引用导致无法获取bean
+
+Tip：循环依赖是一种设计缺陷，应该在最开始就避免。spring 2.6.x后默认禁止循环依赖，当然像开启也可以手动开启
+
+>如何解决循环依赖？
+
+两个方法：
+
+1、三级缓存（解决部分单例bean通过字段注入或Setter注入时的循环依赖），出现循环时，先从三级缓存中获取A的前期暴露对象，此时虽然bean不完整但已近有地址了，可以根据A去获取B了
+
+2、`@Lazy`懒加载，即用时加载。非懒加载时A,B在容器启动时就要加载了。开启懒加载后，比如A调用B时，在B上标注`@Lazy`，此时会先加载A，知道需要传入B时在加载B
+
+<h3>Tip</h3>
+
+三级缓存会有额外的内存开销。
+
+懒加载虽然会让整个容器启动更快，但运行过程中需要第一次使用bean时又会变慢，复杂依赖关系下也可能产生更隐蔽的初始化问题。
+
+## 6、事务
+
+> spring中事务的传播行为？
+
+更具体查看[Spring 有哪几种事务传播行为? - 面试鸭 | 2026最新面试题+详细答案解析](https://www.mianshiya.com/question/1780933295417094146#heading-9)
+
+红框为常用的三个：
+
+- REQUIRED(required),占绝大多数场景。比如订单创建调库存扣减，两个操作必须在同一个事务里，要么一起成功要么一起回滚。
+- REQUIRES_NEW(requires_new)，==开启新事务，原事务挂起==。用在"不管主流程成败，我这步必须独立提交"的场景。典型的就是审计日志、操作记录。用户转账失败了没关系，但"转账失败"这条日志必须写进去，不能因为主事务回滚把日志也吞了。还有发送通知、积分变更这类"尽力而为"的操作也适合用它。
+- NESTED(nested)==开启嵌套子事务，不影响父事务执行==,适合"部分失败可以接受"的批量处理。比如导入 1000 条数据，每条数据开一个嵌套子事务，某条失败就回滚那条，其他的继续。外层事务负责整体控制，发现失败太多可以整体回滚。
+
+![image-20261016105827796](C:\Users\沨烨\AppData\Roaming\Typora\typora-user-images\image-20261016105827796.png)
+
+> 事务隔离级别
+
+Spring 定义了 5 种事务隔离级别，本质上是对数据库隔离级别的封装：
+
+1. **DEFAULT**（默认）：使用底层数据库的默认隔离级别。如Mysql默认隔离级别是可重复读。
+2. **READ_UNCOMMITTED**（读未提交）：最低的隔离级别，允许事务读取尚未提交的数据，可能会导致脏读、不可重复读和幻读。
+3. **READ_COMMITTED**（读已提交）：仅允许读取已经提交的数据，避免了脏读，但可能会出现不可重复读和幻读问题。
+4. **REPEATABLE_READ**（可重复读）：确保在同一个事务内的多次读取结果一致，避免脏读和不可重复读，但可能会有幻读问题。
+5. **SERIALIZABLE**（可串行化）：最高的隔离级别，通过强制事务按顺序执行，完全避免脏读、不可重复读和幻读，代价是性能显著下降。
+
+## 7、权限控制
+
+### SpringSecurity
+
+> 有哪些控制访问请求权限的方法？
+
+- `permitAll()`：无条件允许任何形式访问，不管你登录还是没有登录。
+- `anonymous()`：允许匿名访问，也就是没有登录才可以访问。
+- `denyAll()`：无条件决绝任何形式的访问。
+- `authenticated()`：只允许已认证的用户访问。
+- `fullyAuthenticated()`：只允许完整认证的用户访问，不接受匿名认证或 remember-me 认证。
+- `hasRole(String)` : 只允许指定的角色访问。
+- `hasAnyRole(String)` : 指定一个或者多个角色，满足其一的用户即可访问。
+- `hasAuthority(String)`：只允许具有指定权限的用户访问
+- `hasAnyAuthority(String)`：指定一个或者多个权限，满足其一的用户即可访问。
+- `hasIpAddress(String)` : 只允许指定 ip 的用户访问
+
+> 如何对密码进行加密？
+
+Spring Security 提供了多种密码编码算法的实现，开箱即用。这些实现类的接口是 `PasswordEncoder`；如果需要自定义密码编码方案，也需要实现 `PasswordEncoder` 接口。
+
+`PasswordEncoder` 接口有 `encode()` 和 `matches()` 两个必须实现的抽象方法，以及一个可以按需覆盖的默认方法 `upgradeEncoding()`。
+
+`encode()`:定义加密规则；`matches()`验证密码是否和输入的一样
+
+~~~java
+public interface PasswordEncoder {
+    // 对原始密码进行单向编码
+    String encode(CharSequence var1);
+    // 比对原始密码和数据库中保存的密码
+    boolean matches(CharSequence var1, String var2);
+    // 判断已编码密码是否需要升级编码，默认返回 false
+    default boolean upgradeEncoding(String encodedPassword) {
+        return false;
+    }
+}
+~~~
+
+## 8、日志
+
